@@ -1,0 +1,7 @@
+file(GLOB TEST_SOURCES test_*.c)
+foreach(testsourcefile ${TEST_SOURCES})
+    get_filename_component(testname ${testsourcefile} NAME_WE)
+    add_executable(${testname} EXCLUDE_FROM_ALL ${testsourcefile})
+    target_include_directories(${testname} PRIVATE ${PROJECT_SOURCE_DIR}/src/user)
+    target_link_libraries(${testname} PRIVATE otlp-skb-user)
+endforeach(testsourcefile ${TEST_SOURCES})
