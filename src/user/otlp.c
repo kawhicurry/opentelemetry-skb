@@ -1,17 +1,15 @@
 #include "otlp.h"
+#include <stdio.h>
 
-// cJSON *addSpans()
-// {
-// }
-
-cJSON_bool addAttributeFromItemToObject(cJSON *object, cJSON *item)
+cJSON_bool addAttributeToObject(cJSON *object, const char *const key, const char *const value)
 {
+    cJSON *new_attr = createAttibute(key, value);
     cJSON *attr_array = cJSON_GetObjectItem(object, "attributes");
     if (!attr_array)
     {
         attr_array = cJSON_AddArrayToObject(object, "attributes");
     }
-    return cJSON_AddItemToObjectCS(attr_array, "attributes", item);
+    return cJSON_AddItemToObjectCS(attr_array, "attributes", new_attr);
 }
 
 cJSON *createAttibute(char *key, char *stringValue)
@@ -23,45 +21,51 @@ cJSON *createAttibute(char *key, char *stringValue)
     return attr;
 }
 
-cJSON *createSpan(char *traceId, char *spanId, char *parentSpanId, char *name, unsigned long startTimeUnixNano, unsigned long endTimeUnixNano)
+cJSON *createSpan(char *traceId, char *spanId, char *parentSpanId, char *name, signed long startTimeUnixNano, unsigned long endTimeUnixNano)
 {
     cJSON *span = cJSON_CreateObject();
     cJSON_AddStringToObject(span, "traceId", traceId);
     cJSON_AddStringToObject(span, "spanId", spanId);
     cJSON_AddStringToObject(span, "parentSpanId", parentSpanId);
     cJSON_AddStringToObject(span, "name", name);
-    cJSON_AddNumberToObject(span, "startTimeUnixNano", startTimeUnixNano);
-    cJSON_AddNumberToObject(span, "endTimeUnixNano", endTimeUnixNano);
+    unsigned char s[19], e[19];
+    sprintf(s, "%ld", startTimeUnixNano);
+    sprintf(e, "%ld", startTimeUnixNano);
+    cJSON_AddRawToObject(span, "startTimeUnixNano", s);
+    cJSON_AddRawToObject(span, "endTimeUnixNano", e);
 
     cJSON_AddNumberToObject(span, "kind", 2);
     return span;
 }
 
-// create array of scope spans and return span array for further addition
-cJSON *createScopeSpans()
+cJSON *createResource()
 {
-    cJSON *scopeSpans = cJSON_CreateObject();
-    cJSON *scope = cJSON_AddObjectToObject(scopeSpans, "scope");
-    cJSON_AddStringToObject(scope, "name", "otlp.skb");
-    cJSON_AddStringToObject(scope, "version", "1.0.0");
-    return cJSON_AddArrayToObject(scopeSpans, "spans");
+    cJSON *resource = cJSON_CreateObject();
+    addAttributeToObject(resource, "service.name", "otlp.skb");
+    return resource;
 }
 
-cJSON *createResouce()
+cJSON *createScope()
 {
-    return cJSON_CreateObject();
+    cJSON *scope = cJSON_CreateObject();
+    cJSON_AddStringToObject(scope, "name", "otlp.skb");
+    cJSON_AddStringToObject(scope, "version", "1.0.0");
+    return scope;
 }
 
 struct otlpData createOtlpData()
 {
     struct otlpData d;
-    d.resouceSpans = cJSON_CreateObject();
-    d.spans = createScopeSpans();
-    cJSON *resourceSpansArray = cJSON_AddArrayToObject(d.resouceSpans, "resouceSpans");
+    d.resourceSpans = cJSON_CreateObject();
+    cJSON *resourceSpansArray = cJSON_AddArrayToObject(d.resourceSpans, "resourceSpans");
     cJSON *resourceSpan = cJSON_CreateObject();
-    cJSON_AddItemToObjectCS(resourceSpan, "scopeSpans", d.spans);
-    cJSON_AddItemToObjectCS(resourceSpan, "resource", createResouce());
     cJSON_AddItemToArray(resourceSpansArray, resourceSpan);
+    cJSON_AddItemToObjectCS(resourceSpan, "resource", createResource());
+    cJSON *scopeSpansArray = cJSON_AddArrayToObject(resourceSpan, "scopeSpans");
+    cJSON *scopeSpan = cJSON_CreateObject();
+    cJSON_AddItemToArray(scopeSpansArray, scopeSpan);
+    cJSON_AddItemToObjectCS(scopeSpan, "scope", createScope());
+    d.spans = cJSON_AddArrayToObject(scopeSpan, "spans");
     return d;
 }
 cJSON_bool addSpan(struct otlpData *data, cJSON *span)

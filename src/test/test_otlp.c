@@ -9,11 +9,11 @@ int main()
     cJSON *attr_array = cJSON_AddArrayToObject(span, "attributes");
     cJSON_AddItemToArray(attr_array, attr);
     cJSON *attr1 = createAttibute("123", "455");
-    addAttributeFromItemToObject(span, attr1);
+    addAttributeToObject(span, attr1);
 
     struct otlpData d = createOtlpData();
     addSpan(&d, span);
-    char *s = cJSON_Print(d.resouceSpans);
+    char *s = cJSON_Print(d.resourceSpans);
     cJSON_Delete(span);
     printf("%s\n", s);
 }
