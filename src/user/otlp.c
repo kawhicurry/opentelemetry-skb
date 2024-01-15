@@ -12,7 +12,7 @@ cJSON_bool addAttributeToObject(cJSON *object, const char *const key, const char
     return cJSON_AddItemToObjectCS(attr_array, "attributes", new_attr);
 }
 
-cJSON *createAttibute(char *key, char *stringValue)
+cJSON *createAttibute(const char *const key, const char *const stringValue)
 {
     cJSON *attr = cJSON_CreateObject();
     cJSON_AddStringToObject(attr, "key", key);
