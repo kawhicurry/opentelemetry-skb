@@ -140,7 +140,7 @@ clean:
 int main()
 {
     libbpf_set_print(libbpf_print_fn);
-    FILE *f = fopen("../misc/func_list.txt", "r");
+    FILE *f = fopen("../misc/func-list/func_list.txt", "r");
     char funcname[30];
     // check_arg_pos("ip_rcv",1);
     // return 0;
