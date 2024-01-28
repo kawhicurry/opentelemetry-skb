@@ -11,8 +11,8 @@ int main()
         return -1;
     const struct btf *btf = btf__load_vmlinux_btf();
     const struct btf_type *skb_type;
-    skb_type = btf__type_by_id(btf, skb_id);
     skb_id = btf__find_by_name(btf, "sk_buff");
+    skb_type = btf__type_by_id(btf, skb_id);
     while (fgets(funcname, 50, f))
     {
         int func_id, len, i;
