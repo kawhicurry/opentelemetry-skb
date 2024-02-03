@@ -16,37 +16,47 @@ struct
 } entry_rb SEC(".maps");
 
 SEC("fentry")
-int BPF_PROG(fentry_prog, struct sk_buff *skb)
+int BPF_PROG(fentry_prog)
 {
+    // struct sk_buff *skb = NULL;
+    __u64 skb = 0;
+    int err = bpf_get_func_arg(ctx, 0, &skb);
     // check first
     event_t *e = bpf_ringbuf_reserve(&entry_rb, sizeof(*e), 0);
     if (!e)
         return 0;
 
     e->type = 0;
+    // if (!err)
     e->skb = (__u64)skb;
     e->addr = bpf_get_func_ip(ctx);
     e->ksize = bpf_get_stack(ctx, e->kstack, sizeof(e->kstack), 0);
     e->time = bpf_ktime_get_ns();
-    e->timestamp = skb->tstamp;
 
     bpf_ringbuf_submit(e, 0);
     return BPF_OK;
 }
 
 SEC("fexit")
-int BPF_PROG(fexit_prog, struct sk_buff *skb)
+int BPF_PROG(fexit_prog)
 {
+    // struct sk_buff *skb = NULL;
+    __u64 skb = 0;
+    int err = bpf_get_func_arg(ctx, 0, &skb);
     // check first
     event_t *e = bpf_ringbuf_reserve(&entry_rb, sizeof(*e), 0);
     if (!e)
         return 0;
 
     e->type = 1;
+    // if (!err)
     e->skb = (__u64)skb;
     e->addr = bpf_get_func_ip(ctx);
+    e->ksize = bpf_get_stack(ctx, e->kstack, sizeof(e->kstack), 0);
     e->time = bpf_ktime_get_ns();
-    e->timestamp = skb->tstamp;
+    __u64 ret = 0;
+    bpf_get_func_ret(ctx, &ret);
+    e->ret = ret;
 
     bpf_ringbuf_submit(e, 0);
     return BPF_OK;

@@ -9,7 +9,7 @@ struct skb_event
     __u32 skb_t;
 };
 
-#define MAX_STACK_SIZE 64
+#define MAX_STACK_SIZE 256
 struct stack_event
 {
     __u64 ip;
@@ -25,7 +25,7 @@ typedef struct
     __u64 ksize;                  // kstack size
     __u64 kstack[MAX_STACK_SIZE]; // current kernel stack
     __u64 skb;
-    __u64 timestamp; // skb's tstamp
+    __u64 ret;
 } event_t;
 
 #endif
