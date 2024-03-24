@@ -1,6 +1,8 @@
 package bpf
 
 import (
+	"os"
+
 	"github.com/cilium/ebpf/btf"
 )
 
@@ -11,18 +13,26 @@ type SkbFunc struct {
 }
 
 func GetSkbFuncList() (funcList []SkbFunc) {
-	spec, _ := btf.LoadKernelSpec()
-	iter := spec.Iterate()
-	for iter.Next() {
-		t := iter.Type
-		argPos, argRet := getSkbPos(t)
-		if argPos >= 0 || argRet >= 0 {
-			// fmt.Println(t.TypeName(), argPos, ret)
-			funcList = append(funcList, SkbFunc{
-				FuncName: t.TypeName(),
-				ArgRet:   argRet,
-				ArgPos:   argPos,
-			})
+	prefix := "/sys/kernel/btf/"
+	entries, _ := os.ReadDir(prefix)
+	kernelSpec, _ := btf.LoadKernelSpec()
+	for _, e := range entries {
+		f, _ := os.Open(prefix + e.Name())
+		spec, err := btf.LoadSplitSpecFromReader(f, kernelSpec)
+		if err != nil {
+			panic(err)
+		}
+		iter := spec.Iterate()
+		for iter.Next() {
+			t := iter.Type
+			argPos, argRet := getSkbPos(t)
+			if argPos >= 0 || argRet >= 0 {
+				funcList = append(funcList, SkbFunc{
+					FuncName: t.TypeName(),
+					ArgRet:   argRet,
+					ArgPos:   argPos,
+				})
+			}
 		}
 	}
 	return funcList

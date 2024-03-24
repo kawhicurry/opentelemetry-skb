@@ -2,131 +2,57 @@ package parse
 
 import (
 	"context"
+	"fmt"
 	"opentelemetry-skb/bpf"
-	"syscall"
+	"sort"
 	"time"
 
-	"github.com/cilium/ebpf/ringbuf"
-	"github.com/inspektor-gadget/inspektor-gadget/pkg/kallsyms"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
-
-type Entry struct {
-	Name       string
-	Flag       uint64
-	Ktime      uint64
-	Skb        uint64
-	TPid       uint64
-	Addr       uint64
-	Ret        uint64
-	Depth      int
-	StackRaw   []uint64
-	StackNames []string
-}
-
-type TpidEntry map[uint64][]Entry
-type SkbEntry map[uint64]TpidEntry
-
-var RD *kallsyms.KAllSyms
-var AllEntry SkbEntry
-var BootTime time.Time
-
-func init() {
-	var err error
-	RD, err = kallsyms.NewKAllSyms()
-	if err != nil {
-		panic(err)
-	}
-	AllEntry = make(SkbEntry)
-
-	var info syscall.Sysinfo_t
-	err = syscall.Sysinfo(&info)
-	if err != nil {
-		panic(err)
-	}
-	BootTime = time.Now().Add(-time.Duration(info.Uptime) * time.Second)
-}
-
-func readRecord(rc *ringbuf.Record, offset int16) uint64 {
-	return bpf.ByteOrder().Uint64(rc.RawSample[offset : offset+8])
-}
-
-func IngestRecord(record *ringbuf.Record) {
-	rd := RD
-
-	flag := readRecord(record, bpf.OFFSET_FLAG)
-	ktime := readRecord(record, bpf.OFFSET_KTIME)
-	pid := readRecord(record, bpf.OFFSET_TPID)
-	addr := readRecord(record, bpf.OFFSET_IP)
-	skb := readRecord(record, bpf.OFFSET_POSARG)
-	ret := readRecord(record, bpf.OFFSET_RETARG)
-	// depth := bpf.ByteOrder().Uint64(record.RawSample[i-8 : i])
-	stacks := []uint64{}
-	stackNames := []string{}
-	funcName := rd.LookupByInstructionPointer(addr)
-	skip := true
-	length := int16(len(record.RawSample))
-	for i := bpf.OFFSET_STACKTRACE; i <= length; i += 8 {
-		// curStack := bpf.ByteOrder().Uint64(record.RawSample[i-8 : i])
-		curStack := readRecord(record, i)
-		stackName := rd.LookupByInstructionPointer(curStack)
-		if curStack == 0 {
-			break
-		}
-		if funcName == stackName {
-			skip = false
-		}
-		if skip {
-			continue
-		}
-		stacks = append(stacks, curStack)
-		stackNames = append(stackNames, stackName)
-	}
-
-	_, exist := AllEntry[skb]
-	if !exist {
-		AllEntry[skb] = make(TpidEntry)
-	}
-	e := Entry{
-		Flag:       flag,
-		Ktime:      ktime,
-		Skb:        skb,
-		TPid:       pid,
-		Addr:       addr,
-		Ret:        ret,
-		Depth:      len(stacks),
-		StackRaw:   stacks,
-		StackNames: stackNames,
-		Name:       funcName,
-	}
-	AllEntry[skb][pid] = append(AllEntry[skb][pid], e)
-	if ret != 0 {
-		_, exist = AllEntry[ret]
-		if !exist {
-			AllEntry[ret] = make(TpidEntry)
-		}
-		AllEntry[ret][pid] = append(AllEntry[ret][pid], e)
-	}
-}
 
 func ParseAllEntry() {
 	shutdown := initTracer()
 	defer shutdown()
 
-	for _, tpidEntry := range AllEntry {
-		parseSkbMap(tpidEntry)
-
+	for skb, tpidEntry := range AllEntry {
+		parseSkbMap(context.Background(), skb, tpidEntry)
 	}
 }
 
-func parseSkbMap(tpidEntry TpidEntry) {
-	ctx := context.Background()
-	defer ctx.Done()
+func GetPlantEntry() {
+	plantList := []Entry{}
+	for skb, skbEntry := range AllEntry {
+		if skb == 0 {
+			fmt.Println("Not consumed:", len(skbEntry))
+			continue
+		}
+		for _, tpidEntry := range skbEntry {
+			plantList = append(plantList, tpidEntry...)
+		}
+	}
+	sort.Slice(plantList, func(i int, j int) bool {
+		return plantList[i].Ktime < plantList[j].Ktime
+	})
+	for _, v := range plantList {
+		t := time.Unix(0, int64(v.Ktime)).Format(time.StampNano)
+		pid := v.TPid >> 32
+		tid := uint32(v.TPid)
+		// fmt.Printf("@@@ %s %d %s %s %x %x %d %d %d %d\n", strings.Repeat(" ", len(v.StackRaw)-min+1), v.Flag, t, v.Name, v.Skb, v.Ret, pid, tid, v.Cpu, len(v.StackRaw))
+		fmt.Printf("@@@ %d %s %s %x %x %d %d %d %d\n", v.Flag, t, v.Name, v.Skb, v.Ret, pid, tid, v.Cpu, len(v.StackRaw))
+	}
+}
 
+func parseSkbMap(ctx context.Context, skb uint64, tpidEntry TpidEntry) {
+	if len(tpidEntry) == 0 {
+		return
+	}
 	startTime := ^uint64(0)
 	endTime := uint64(0)
 	for _, list := range tpidEntry {
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].Ktime < list[j].Ktime
+		})
 		if list[0].Ktime < startTime {
 			startTime = list[0].Ktime
 		}
@@ -135,65 +61,71 @@ func parseSkbMap(tpidEntry TpidEntry) {
 		}
 	}
 
+	// ctx, span := Tracer.Start(ctx, "skb", trace.WithAttributes(attribute.Int64("skb", int64(skb))))
+	// defer span.End()
 	kstartTime := BootTime.Add(time.Duration(startTime))
 	kendTime := BootTime.Add(time.Duration(endTime))
-	ctx, span := Tracer.Start(ctx, "skb", trace.WithTimestamp(kstartTime))
+	newCtx, span := Tracer.Start(ctx, "skb", trace.WithTimestamp(kstartTime))
 	defer span.End(trace.WithTimestamp(kendTime))
 
 	for _, list := range tpidEntry {
-		parseTpidMap(ctx, list)
+		parseTpidMap(newCtx, list)
 	}
 }
 
 func parseTpidMap(ctx context.Context, list []Entry) {
-	// sort.Slice(list, func(i, j int) bool {
-	// 	return list[i].Ktime < list[j].Ktime
-	// })
-
+	// ctx, span := Tracer.Start(ctx, "tpid")
+	// defer span.End()
 	kstartTime := BootTime.Add(time.Duration(list[0].Ktime))
 	kendTime := BootTime.Add(time.Duration(list[len(list)-1].Ktime))
-	ctx, span := Tracer.Start(ctx, "tpid", trace.WithTimestamp(kstartTime))
+	newCtx, span := Tracer.Start(ctx, "tpid", trace.WithTimestamp(kstartTime))
 	defer span.End(trace.WithTimestamp(kendTime))
 
 	for i := 0; i < len(list); i += 1 {
-		i = parseEntry2(ctx, i, list)
+		i = parseEntry(newCtx, i, list)
 	}
 }
 
 // call recursive
-func parseEntry2(ctx context.Context, index int, list []Entry) int {
+func parseEntry(ctx context.Context, index int, list []Entry) int {
 	curEntry := list[index]
+	// situation that list start with fexit
 	if curEntry.Flag == bpf.EXIT_FLAG {
 		return index
 	}
-	kstartTime := BootTime.Add(time.Duration(curEntry.Ktime))
-	newCtx, span := Tracer.Start(ctx, curEntry.Name, trace.WithTimestamp(kstartTime))
-	defer func() {
-		kendTime := BootTime.Add(time.Duration(list[index].Ktime))
-		span.End(trace.WithTimestamp(kendTime))
-	}()
-	span.SetAttributes(
-		attribute.String("name", curEntry.Name),
-		attribute.Int("skb", int(curEntry.Skb)),
-		attribute.Int("tpid", int(curEntry.TPid)),
-		attribute.Int("ktime", int(curEntry.Ktime)),
-		attribute.Int("depth", curEntry.Depth),
-		attribute.StringSlice("stacks", curEntry.StackNames),
-	)
+	// situation that list end with fentry
 	if index+1 == len(list) {
 		return index
 	}
-	nextEntry := list[index+1]
-	if nextEntry.Depth == curEntry.Depth {
-		if nextEntry.Flag == bpf.EXIT_FLAG {
-			index = parseEntry2(newCtx, index+1, list)
-			return index
-		}
-		return index
-	} else if nextEntry.Depth > curEntry.Depth {
-		// will be called at defer
-		index = parseEntry2(newCtx, index+1, list)
-		return index
+	kstartTime := BootTime.Add(time.Duration(curEntry.Ktime))
+	kendTime := BootTime.Add(time.Duration(list[index].Ktime))
+	newCtx, span := Tracer.Start(ctx, curEntry.Name, trace.WithTimestamp(kstartTime), trace.WithAttributes(
+		// newCtx, span := Tracer.Start(ctx, curEntry.Name, trace.WithAttributes(
+		attribute.String("name", curEntry.Name),
+		attribute.Int("flag", int(curEntry.Flag)),
+		attribute.String("skb", fmt.Sprint(curEntry.Skb)),
+		attribute.Int("cpu", int(curEntry.Cpu)),
+		attribute.String("tpid", fmt.Sprint(curEntry.TPid)),
+		attribute.String("begin", fmt.Sprint(curEntry.Ktime)),
+		attribute.Int("depth", curEntry.Depth),
+		attribute.StringSlice("stacks", curEntry.StackNames),
+	))
+	// defer span.End()
+	defer span.End(trace.WithTimestamp(kendTime))
+	index++
+	nextEntry := list[index]
+	if nextEntry.Flag == bpf.ENTRY_FLAG {
+		index = parseEntry(newCtx, index, list)
 	}
+	exitEntry := list[index]
+
+	retVal := ""
+	if exitEntry.Name == curEntry.Name {
+		retVal = fmt.Sprint(exitEntry.Ret)
+	}
+	span.SetAttributes(
+		attribute.String("end", fmt.Sprint(exitEntry.Ktime)),
+		attribute.String("ret", retVal),
+	)
 	return index
 }

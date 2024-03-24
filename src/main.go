@@ -9,47 +9,60 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
+const (
+// maxIngestSize = 5000
+// maxIngestSize = 500000
+)
+
 func main() {
 	err := rlimit.RemoveMemlock()
 	if err != nil {
 		panic(err)
 	}
-	funcList := []bpf.SkbFunc{
-		{FuncName: "ip_rcv", ArgPos: 0, ArgRet: -1},
-		// {FuncName: "skb_put", ArgPos: 0, ArgRet: 1},
-		{FuncName: "icmp_rcv", ArgPos: 0, ArgRet: -1},
-		{FuncName: "ip_rcv_finish", ArgPos: 2, ArgRet: -1},
+	debug := false
+	// debug = true
+	maxIngestSize := 500000
+	funcList := bpf.GetSkbFuncList()
+	if debug {
+		maxIngestSize = 50
+		funcList = []bpf.SkbFunc{
+			// {FuncName: "ip_rcv", ArgPos: 0, ArgRet: -1},
+			{FuncName: "__alloc_skb", ArgPos: -1, ArgRet: 1},
+			{FuncName: "netvsc_alloc_recv_skb", ArgPos: -1, ArgRet: 1},
+			// {FuncName: "skb_put", ArgPos: 0, ArgRet: -1},
+			// {FuncName: "icmp_rcv", ArgPos: 0, ArgRet: -1},
+			// {FuncName: "ip_rcv_finish", ArgPos: 2, ArgRet: -1},
+		}
 	}
-	funcList = bpf.GetSkbFuncList()
 	rb, err := bpf.InitRingbuf()
 	if err != nil {
 		panic(err)
 	}
 	defer rb.Close()
 	success, failed := 0, 0
-	loadBar := progressbar.Default(int64(len(funcList)), "loading:")
-	for _, f := range funcList {
-		loader, err := bpf.LoadTracingProg(f, rb.GetFD())
+	fmt.Println("Will load num:", len(funcList))
+	loadBar := progressbar.Default(int64(len(funcList)), "Loading: ")
+	for _, sf := range funcList {
+		loadBar.Add(1)
+		loader, err := bpf.LoadTracingProg(sf, rb.GetFD())
 		if err != nil {
-			// fmt.Println(i, f, err)
+			fmt.Println("Load failed:", sf.FuncName, sf.ArgPos, sf.ArgRet, err)
 			failed++
 		} else {
+			fmt.Println("Load success:", sf.FuncName, sf.ArgPos, sf.ArgRet)
 			success++
 		}
-		loadBar.Add(1)
 		defer loader.Close()
 	}
-	fmt.Println(failed, success, len(funcList))
-	// const maxIngestSize = 1000
-	const maxIngestSize = 500000
-	readBar := progressbar.Default(maxIngestSize, "profiling")
+	ingestBar := progressbar.Default(int64(maxIngestSize),"Ingesting")
 	for i := 0; i < maxIngestSize; i++ {
+		ingestBar.Add(1)
 		record, err := rb.Read()
 		if err != nil {
 			panic(err)
 		}
+		// fmt.Println("Reamain:", record.Remaining, rb.BufferSize(), i, maxIngestSize)
 		parse.IngestRecord(&record)
-		readBar.Add(1)
 	}
 	parse.ParseAllEntry()
 	fmt.Println("finish")

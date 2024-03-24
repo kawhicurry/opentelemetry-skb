@@ -10,6 +10,7 @@ func GetInsn(eventFD int, argPos int16, argRet int16, flag int64) asm.Instructio
 	b.insnSetFlag(flag)
 	b.insnGetKtime()
 	b.insnGetPid()
+	b.insnGetCPU()
 	b.insnGetIp()
 	if argPos < 0 {
 		b.insnSetZero(OFFSET_POSARG)
@@ -68,6 +69,14 @@ func (b *insnBuilder) insnGetPid() {
 	insn := asm.Instructions{
 		asm.FnGetCurrentPidTgid.Call(),
 		asm.StoreMem(RegEvent, OFFSET_TPID, asm.R0, asm.DWord),
+	}
+	b.instrucions = append(b.instrucions, insn...)
+}
+
+func (b *insnBuilder) insnGetCPU() {
+	insn := asm.Instructions{
+		asm.FnGetSmpProcessorId.Call(),
+		asm.StoreMem(RegEvent, OFFSET_CPU, asm.R0, asm.DWord),
 	}
 	b.instrucions = append(b.instrucions, insn...)
 }

@@ -14,7 +14,7 @@ func InitRingbuf() (RingbufLoader, error) {
 	b := RingbufLoader{}
 	err := b.initRingbuf()
 	if err != nil {
-		b.Close()
+		return RingbufLoader{}, nil
 	}
 	return b, err
 }
@@ -27,7 +27,7 @@ func loadMap() (rb *ebpf.Map, rd *ringbuf.Reader, err error) {
 	rb, err = ebpf.NewMap(&ebpf.MapSpec{
 		Name:       "eventRingbuf",
 		Type:       ebpf.RingBuf,
-		MaxEntries: uint32(os.Getpagesize()),
+		MaxEntries: 16 * 1024 * uint32(os.Getpagesize()),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -45,6 +45,9 @@ func (l *RingbufLoader) GetFD() int {
 
 func (l *RingbufLoader) Read() (ringbuf.Record, error) {
 	return l.reader.Read()
+}
+func (l *RingbufLoader) BufferSize() int {
+	return l.reader.BufferSize()
 }
 
 func (l *RingbufLoader) Close() {

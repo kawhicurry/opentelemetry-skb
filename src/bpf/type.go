@@ -47,6 +47,7 @@ const (
 	OFFSET_FLAG = int16(iota * 8)
 	OFFSET_KTIME
 	OFFSET_TPID
+	OFFSET_CPU
 	OFFSET_IP
 	OFFSET_POSARG
 	OFFSET_RETARG
@@ -54,5 +55,6 @@ const (
 	OFFSET_STACKTRACE
 	OFFSET_MAX
 
-	MaxStackSize = 1024
+	MaxStackSize       = 1024
+	bpfCurrentCpuMagic = 0xffffffff
 )
