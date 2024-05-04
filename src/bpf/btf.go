@@ -64,8 +64,32 @@ func getSkbPos(t btf.Type) (int16, int16) {
 					argRet = len(proto.Params)
 				}
 			}
-
 		}
 	}
 	return int16(argPos), int16(argRet)
+}
+
+func GetSkbTimestampOffset() uint32 {
+	spec, _ := btf.LoadKernelSpec()
+	iter := spec.Iterate()
+	for iter.Next() {
+		t := iter.Type
+		if t.TypeName() == "sk_buff" {
+			switch st := t.(type) {
+			case *btf.Struct:
+				for _, m := range st.Members {
+					switch sst := m.Type.(type) {
+					case *btf.Union:
+						for _, mm := range sst.Members {
+							// skb_mstamp_ns shared the same offset
+							if mm.Name == "tstamp" {
+								return uint32(m.Offset) / 8
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return 0
 }

@@ -12,6 +12,7 @@ type Entry struct {
 	Flag       uint64
 	Ktime      uint64
 	Skb        uint64
+	Timestamp  uint64
 	Cpu        uint64
 	TPid       uint64
 	Addr       uint64
@@ -21,8 +22,8 @@ type Entry struct {
 	StackNames []string
 }
 
-type TpidEntry map[uint64][]Entry
 type SkbEntry map[uint64]TpidEntry
+type TpidEntry map[uint64][]Entry
 
 var KsymsParser *kallsyms.KAllSyms
 var AllEntry SkbEntry

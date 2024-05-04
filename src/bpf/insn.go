@@ -14,6 +14,7 @@ func GetInsn(eventFD int, argPos int16, argRet int16, flag int64) asm.Instructio
 	b.insnGetIp()
 	if argPos < 0 {
 		b.insnSetZero(OFFSET_POSARG)
+		b.insnSetZero(OFFSET_TIMESTAMP)
 	} else {
 		b.insnGetArgSkb(argPos)
 	}
@@ -91,18 +92,31 @@ func (b *insnBuilder) insnGetIp() {
 }
 
 func (b *insnBuilder) insnGetArgSkb(argPos int16) {
+	timestampOffset := GetSkbTimestampOffset()
 	insn := asm.Instructions{
 		// asm.LoadMem(asm.R0, RegContext, argPos*8, asm.DWord).WithSource(asm.Comment("read from ctx[pos]")),
 		// asm.StoreMem(RegEvent, OFFSET_POSARG, asm.R0, asm.DWord),
+		asm.StoreImm(asm.R10, -8, 0, asm.DWord),
+		// asm.StoreImm(asm.R10, -16, 0, asm.DWord),
 
 		asm.Mov.Reg(asm.R1, RegContext),
 		asm.LoadImm(asm.R2, int64(argPos), asm.DWord),
 		asm.Mov.Reg(asm.R3, asm.R10),
 		asm.Add.Imm(asm.R3, -8),
-		asm.StoreImm(asm.R10, -8, 0, asm.DWord),
 		asm.FnGetFuncArg.Call(),
 		asm.LoadMem(asm.R0, asm.R10, -8, asm.DWord),
 		asm.StoreMem(RegEvent, OFFSET_POSARG, asm.R0, asm.DWord),
+
+		asm.Mov.Reg(asm.R1, asm.R10),
+		asm.Add.Imm(asm.R1, -8),
+		asm.Mov.Imm(asm.R2, 8),
+		asm.Mov.Reg(asm.R3, asm.R0),
+		asm.Add.Imm(asm.R3, int32(timestampOffset)),
+		asm.FnProbeRead.Call(),
+		// asm.LoadMem(asm.R1, asm.R0, int16(timestampOffset), asm.DWord),
+		// asm.Add.Reg(asm.R0, RegTmp),
+		asm.LoadMem(asm.R0, asm.R10, -8, asm.DWord),
+		asm.StoreMem(RegEvent, OFFSET_TIMESTAMP, asm.R0, asm.DWord),
 	}
 	b.instrucions = append(b.instrucions, insn...)
 }

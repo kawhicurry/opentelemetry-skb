@@ -11,13 +11,29 @@ const (
 	BPF_F_INDEX_MASK  = 0xffffffff
 	BPF_F_CURRENT_CPU = BPF_F_INDEX_MASK
 
-	RegContext = asm.R6
+	RegTmp     = asm.R7
+	RegContext = asm.R8
 	RegEvent   = asm.R9
 
 	returnSymbol = "return"
 
 	ENTRY_FLAG = 0
 	EXIT_FLAG  = 1
+
+	OFFSET_FLAG = int16(iota * 8)
+	OFFSET_KTIME
+	OFFSET_TPID
+	OFFSET_CPU
+	OFFSET_IP
+	OFFSET_POSARG
+	OFFSET_TIMESTAMP
+	OFFSET_RETARG
+	OFFSET_STACKSIZE
+	OFFSET_STACKTRACE
+	OFFSET_MAX
+
+	MaxStackSize       = 1024
+	bpfCurrentCpuMagic = 0xffffffff
 )
 
 type RingbufLoader struct {
@@ -42,19 +58,3 @@ type Closer interface {
 func AnyClose(c Closer) {
 	c.Close()
 }
-
-const (
-	OFFSET_FLAG = int16(iota * 8)
-	OFFSET_KTIME
-	OFFSET_TPID
-	OFFSET_CPU
-	OFFSET_IP
-	OFFSET_POSARG
-	OFFSET_RETARG
-	OFFSET_STACKSIZE
-	OFFSET_STACKTRACE
-	OFFSET_MAX
-
-	MaxStackSize       = 1024
-	bpfCurrentCpuMagic = 0xffffffff
-)

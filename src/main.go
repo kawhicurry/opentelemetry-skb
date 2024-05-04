@@ -26,9 +26,9 @@ func main() {
 	if debug {
 		maxIngestSize = 50
 		funcList = []bpf.SkbFunc{
-			// {FuncName: "ip_rcv", ArgPos: 0, ArgRet: -1},
-			{FuncName: "__alloc_skb", ArgPos: -1, ArgRet: 1},
-			{FuncName: "netvsc_alloc_recv_skb", ArgPos: -1, ArgRet: 1},
+			{FuncName: "ip_rcv", ArgPos: 0, ArgRet: -1},
+			// {FuncName: "__alloc_skb", ArgPos: -1, ArgRet: 1},
+			// {FuncName: "netvsc_alloc_recv_skb", ArgPos: -1, ArgRet: 1},
 			// {FuncName: "skb_put", ArgPos: 0, ArgRet: -1},
 			// {FuncName: "icmp_rcv", ArgPos: 0, ArgRet: -1},
 			// {FuncName: "ip_rcv_finish", ArgPos: 2, ArgRet: -1},
@@ -54,7 +54,7 @@ func main() {
 		}
 		defer loader.Close()
 	}
-	ingestBar := progressbar.Default(int64(maxIngestSize),"Ingesting")
+	ingestBar := progressbar.Default(int64(maxIngestSize), "Ingesting")
 	for i := 0; i < maxIngestSize; i++ {
 		ingestBar.Add(1)
 		record, err := rb.Read()

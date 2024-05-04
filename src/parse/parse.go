@@ -61,8 +61,6 @@ func parseSkbMap(ctx context.Context, skb uint64, tpidEntry TpidEntry) {
 		}
 	}
 
-	// ctx, span := Tracer.Start(ctx, "skb", trace.WithAttributes(attribute.Int64("skb", int64(skb))))
-	// defer span.End()
 	kstartTime := BootTime.Add(time.Duration(startTime))
 	kendTime := BootTime.Add(time.Duration(endTime))
 	newCtx, span := Tracer.Start(ctx, "skb", trace.WithTimestamp(kstartTime))
@@ -74,8 +72,6 @@ func parseSkbMap(ctx context.Context, skb uint64, tpidEntry TpidEntry) {
 }
 
 func parseTpidMap(ctx context.Context, list []Entry) {
-	// ctx, span := Tracer.Start(ctx, "tpid")
-	// defer span.End()
 	kstartTime := BootTime.Add(time.Duration(list[0].Ktime))
 	kendTime := BootTime.Add(time.Duration(list[len(list)-1].Ktime))
 	newCtx, span := Tracer.Start(ctx, "tpid", trace.WithTimestamp(kstartTime))
@@ -100,17 +96,16 @@ func parseEntry(ctx context.Context, index int, list []Entry) int {
 	kstartTime := BootTime.Add(time.Duration(curEntry.Ktime))
 	kendTime := BootTime.Add(time.Duration(list[index].Ktime))
 	newCtx, span := Tracer.Start(ctx, curEntry.Name, trace.WithTimestamp(kstartTime), trace.WithAttributes(
-		// newCtx, span := Tracer.Start(ctx, curEntry.Name, trace.WithAttributes(
 		attribute.String("name", curEntry.Name),
 		attribute.Int("flag", int(curEntry.Flag)),
 		attribute.String("skb", fmt.Sprint(curEntry.Skb)),
+		attribute.String("timestamp", fmt.Sprint(curEntry.Timestamp)),
 		attribute.Int("cpu", int(curEntry.Cpu)),
 		attribute.String("tpid", fmt.Sprint(curEntry.TPid)),
 		attribute.String("begin", fmt.Sprint(curEntry.Ktime)),
 		attribute.Int("depth", curEntry.Depth),
 		attribute.StringSlice("stacks", curEntry.StackNames),
 	))
-	// defer span.End()
 	defer span.End(trace.WithTimestamp(kendTime))
 	index++
 	nextEntry := list[index]
